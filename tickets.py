@@ -1,12 +1,12 @@
 # ============================================================
 #                         BOSS BOB
-#                         TICKET SYSTEM
+#                    COMPLETE TICKET SYSTEM
 # ============================================================
 
+import asyncio
 import discord
 from discord.ext import commands
 from discord.ui import View, Button, Select
-import asyncio
 
 
 # ============================================================
@@ -14,8 +14,12 @@ import asyncio
 # ============================================================
 
 SUPPORT_CHANNEL_ID = 1542609199966453790
-REPORT_CHANNEL_ID = 1542622151683866635
+
+# Report panel removed.
+# Reports are handled through Support.
+
 ROLE_REQUEST_CHANNEL_ID = 1542609148909322282
+
 TICKETS_LOG_CHANNEL_ID = 1542608080116785172
 
 STAFF_ROLE_ID = 1542600297048711168
@@ -53,6 +57,10 @@ async def send_log(guild, title, description, color):
     channel = guild.get_channel(TICKETS_LOG_CHANNEL_ID)
 
     if not channel:
+        print(
+            f"⚠️ Logs channel not found: "
+            f"{TICKETS_LOG_CHANNEL_ID}"
+        )
         return
 
     embed = discord.Embed(
@@ -76,8 +84,23 @@ async def send_dm(member, title, description, color):
 
         await member.send(embed=embed)
 
+        return True
+
     except discord.Forbidden:
-        pass
+
+        print(
+            f"⚠️ Could not DM {member}."
+        )
+
+        return False
+
+    except Exception as error:
+
+        print(
+            f"⚠️ DM error: {error}"
+        )
+
+        return False
 
 
 # ============================================================
@@ -90,13 +113,18 @@ class CloseTicket(View):
 
         super().__init__(timeout=None)
 
+
     @discord.ui.button(
         label="Close Ticket",
         emoji="🔒",
         style=discord.ButtonStyle.danger,
         custom_id="boss_bob_close_ticket"
     )
-    async def close(self, interaction, button):
+    async def close(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
 
         if not staff_or_admin(interaction.user):
 
@@ -117,45 +145,75 @@ class CloseTicket(View):
         await send_log(
             interaction.guild,
             "🔒 Ticket Closed",
-            f"**Ticket:** `{channel.name}`\n"
-            f"**Closed by:** {interaction.user.mention}",
+            (
+                f"**Ticket:** `{channel.name}`\n"
+                f"**Closed by:** {interaction.user.mention}"
+            ),
             discord.Color.red()
         )
 
         await asyncio.sleep(2)
 
-        await channel.delete()
+        try:
+
+            await channel.delete(
+                reason=f"Ticket closed by {interaction.user}"
+            )
+
+        except discord.NotFound:
+            pass
+
+        except discord.Forbidden:
+
+            print(
+                f"❌ Cannot delete ticket channel "
+                f"{channel.name}"
+            )
 
 
 # ============================================================
-#                    SUPPORT RESULT
+#                    SUPPORT TICKET
 # ============================================================
 
-class SupportResult(View):
+class SupportView(View):
 
     def __init__(self):
 
         super().__init__(timeout=None)
 
-    async def finish(self, interaction, result):
+
+    @discord.ui.button(
+        label="Close Ticket",
+        emoji="🔒",
+        style=discord.ButtonStyle.danger,
+        custom_id="boss_bob_support_close"
+    )
+    async def close(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
 
         if not staff_or_admin(interaction.user):
 
             await interaction.response.send_message(
-                "❌ You don't have permission to do this.",
+                "❌ You don't have permission to close this ticket.",
                 ephemeral=True
             )
 
             return
 
         channel = interaction.channel
+
         owner = None
 
         if channel.topic:
 
             try:
 
-                if channel.topic.startswith("ticket_owner:"):
+                if channel.topic.startswith(
+                    "ticket_owner:"
+                ):
 
                     owner_id = int(
                         channel.topic.split(":")[1]
@@ -165,159 +223,56 @@ class SupportResult(View):
                         owner_id
                     )
 
-            except ValueError:
+            except (ValueError, IndexError):
+
                 pass
 
         if owner:
 
             await send_dm(
                 owner,
-                "🛠️ Support Ticket Update",
-                f"Your support ticket was marked as **{result}**.\n\n"
-                f"👤 **Handled by:** {interaction.user.mention}",
-                discord.Color.green()
+                "🛠️ Support Ticket Closed",
+                (
+                    "Your support ticket has been closed.\n\n"
+                    f"**Closed by:** "
+                    f"{interaction.user.mention}"
+                ),
+                discord.Color.red()
             )
 
         await send_log(
             interaction.guild,
-            "🛠️ Support Ticket Completed",
-            f"**User:** {owner.mention if owner else 'Unknown'}\n"
-            f"**Result:** {result}\n"
-            f"**Handled by:** {interaction.user.mention}\n"
-            f"**Ticket:** `{channel.name}`",
-            discord.Color.green()
+            "🛠️ Support Ticket Closed",
+            (
+                f"**User:** "
+                f"{owner.mention if owner else 'Unknown'}\n"
+                f"**Closed by:** "
+                f"{interaction.user.mention}\n"
+                f"**Ticket:** `{channel.name}`"
+            ),
+            discord.Color.red()
         )
 
         await interaction.response.send_message(
-            f"✅ Ticket marked as **{result}**.",
-            view=CloseTicket()
+            "🔒 Closing ticket...",
+            ephemeral=True
         )
 
-    @discord.ui.button(
-        label="Completed",
-        emoji="✅",
-        style=discord.ButtonStyle.success
-    )
-    async def completed(self, interaction, button):
+        await asyncio.sleep(2)
 
-        await self.finish(interaction, "Completed")
+        try:
 
-    @discord.ui.button(
-        label="Not Completed",
-        emoji="❌",
-        style=discord.ButtonStyle.danger
-    )
-    async def not_completed(self, interaction, button):
-
-        await self.finish(interaction, "Not Completed")
-
-    @discord.ui.button(
-        label="Still Needs Help",
-        emoji="🔄",
-        style=discord.ButtonStyle.secondary
-    )
-    async def needs_help(self, interaction, button):
-
-        await self.finish(interaction, "Still Needs Help")
-
-
-# ============================================================
-#                       REPORT RESULT
-# ============================================================
-
-class ReportResult(View):
-
-    def __init__(self):
-
-        super().__init__(timeout=None)
-
-    async def finish(self, interaction, result):
-
-        if not staff_or_admin(interaction.user):
-
-            await interaction.response.send_message(
-                "❌ You don't have permission to do this.",
-                ephemeral=True
+            await channel.delete(
+                reason="Support ticket closed"
             )
 
-            return
+        except discord.Forbidden:
 
-        channel = interaction.channel
-        owner = None
-
-        if channel.topic:
-
-            try:
-
-                if channel.topic.startswith("ticket_owner:"):
-
-                    owner_id = int(
-                        channel.topic.split(":")[1]
-                    )
-
-                    owner = interaction.guild.get_member(
-                        owner_id
-                    )
-
-            except ValueError:
-                pass
-
-        if owner:
-
-            await send_dm(
-                owner,
-                "🚨 Report Update",
-                f"Your report has been reviewed.\n\n"
-                f"📋 **Result:** {result}\n"
-                f"👤 **Reviewed by:** {interaction.user.mention}",
-                discord.Color.orange()
-            )
-
-        await send_log(
-            interaction.guild,
-            "🚨 Report Processed",
-            f"**Reporter:** {owner.mention if owner else 'Unknown'}\n"
-            f"**Result:** {result}\n"
-            f"**Reviewed by:** {interaction.user.mention}\n"
-            f"**Ticket:** `{channel.name}`",
-            discord.Color.orange()
-        )
-
-        await interaction.response.send_message(
-            f"✅ Report marked as **{result}**.",
-            view=CloseTicket()
-        )
-
-    @discord.ui.button(
-        label="Action Taken",
-        emoji="🔨",
-        style=discord.ButtonStyle.danger
-    )
-    async def action_taken(self, interaction, button):
-
-        await self.finish(interaction, "Action Taken")
-
-    @discord.ui.button(
-        label="No Action",
-        emoji="⚪",
-        style=discord.ButtonStyle.secondary
-    )
-    async def no_action(self, interaction, button):
-
-        await self.finish(interaction, "Reviewed - No Action")
-
-    @discord.ui.button(
-        label="Forwarded to Admin",
-        emoji="👑",
-        style=discord.ButtonStyle.primary
-    )
-    async def forwarded(self, interaction, button):
-
-        await self.finish(interaction, "Forwarded to Admin")
+            pass
 
 
 # ============================================================
-#                       ROLE SELECT
+#                    ROLE REQUEST SELECT
 # ============================================================
 
 class RoleSelect(Select):
@@ -329,13 +284,15 @@ class RoleSelect(Select):
             discord.SelectOption(
                 label="Staff",
                 value="staff",
-                emoji="🛡️"
+                emoji="🛡️",
+                description="Request the Staff role"
             ),
 
             discord.SelectOption(
                 label="Administrator",
                 value="administrator",
-                emoji="👑"
+                emoji="👑",
+                description="Request the Administrator role"
             )
 
         ]
@@ -346,29 +303,72 @@ class RoleSelect(Select):
             custom_id="boss_bob_role_select"
         )
 
-    async def callback(self, interaction):
+
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
 
         guild = interaction.guild
         user = interaction.user
 
+        # ----------------------------------------------------
+        # Determine role
+        # ----------------------------------------------------
+
         if self.values[0] == "staff":
 
-            role = guild.get_role(STAFF_ROLE_ID)
+            role = guild.get_role(
+                STAFF_ROLE_ID
+            )
+
             role_name = "Staff"
 
         else:
 
-            role = guild.get_role(ADMIN_ROLE_ID)
+            role = guild.get_role(
+                ADMIN_ROLE_ID
+            )
+
             role_name = "Administrator"
+
 
         if not role:
 
             await interaction.response.send_message(
-                "❌ Role not found.",
+                f"❌ The **{role_name}** role could not be found.",
                 ephemeral=True
             )
 
             return
+
+
+        # ----------------------------------------------------
+        # Prevent duplicate role requests
+        # ----------------------------------------------------
+
+        for channel in guild.text_channels:
+
+            if (
+                channel.topic
+                == f"role_request:{user.id}"
+            ):
+
+                await interaction.response.send_message(
+                    (
+                        "❌ You already have an open "
+                        "role request: "
+                        f"{channel.mention}"
+                    ),
+                    ephemeral=True
+                )
+
+                return
+
+
+        # ----------------------------------------------------
+        # Private ticket permissions
+        # ----------------------------------------------------
 
         overwrites = {
 
@@ -385,92 +385,271 @@ class RoleSelect(Select):
                 )
         }
 
-        for role_id in (STAFF_ROLE_ID, ADMIN_ROLE_ID):
 
-            staff_role = guild.get_role(role_id)
+        # Staff can see it
+        staff_role = guild.get_role(
+            STAFF_ROLE_ID
+        )
 
-            if staff_role:
+        if staff_role:
 
-                overwrites[staff_role] = discord.PermissionOverwrite(
+            overwrites[staff_role] = (
+                discord.PermissionOverwrite(
                     view_channel=True,
                     send_messages=True,
                     read_message_history=True
                 )
+            )
+
+
+        # Admin can see it
+        admin_role = guild.get_role(
+            ADMIN_ROLE_ID
+        )
+
+        if admin_role:
+
+            overwrites[admin_role] = (
+                discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True
+                )
+            )
+
+
+        # ----------------------------------------------------
+        # Create request ticket
+        # ----------------------------------------------------
 
         channel = await guild.create_text_channel(
             f"role-{user.name}",
             overwrites=overwrites,
-            topic=f"ticket_owner:{user.id}"
+            topic=f"role_request:{user.id}"
+        )
+
+
+        # ----------------------------------------------------
+        # Private ticket message
+        # ----------------------------------------------------
+
+        embed = discord.Embed(
+            title="👑 Role Request",
+            description=(
+                f"{user.mention}\n\n"
+                f"**Requested Role:** {role_name}\n\n"
+                "Please explain why you should receive "
+                "this role.\n\n"
+                "An administrator will review your "
+                "request.\n\n"
+                "⚠️ Approval is handled in the "
+                "staff logs channel."
+            ),
+            color=discord.Color.purple()
         )
 
         await channel.send(
             content=user.mention,
-            embed=discord.Embed(
-                title="👑 Role Request",
-                description=(
-                    f"**Requested Role:** {role_name}\n\n"
-                    "Please explain why you should receive this role.\n\n"
-                    "An Administrator will review your request."
-                ),
-                color=discord.Color.purple()
-            ),
-            view=RoleApproval(
-                user.id,
-                role.id,
-                role_name
-            )
+            embed=embed,
+            view=RoleTicketView()
         )
+
+
+        # ----------------------------------------------------
+        # DM requester
+        # ----------------------------------------------------
 
         await send_dm(
             user,
-            "👑 Role Request Submitted",
-            f"Your **{role_name}** request has been submitted.",
+            "📨 Role Request Submitted",
+            (
+                f"Your request for the **{role_name}** "
+                "role has been submitted.\n\n"
+                "An administrator will review it."
+            ),
             discord.Color.purple()
         )
+
+
+        # ----------------------------------------------------
+        # Logs channel
+        # ----------------------------------------------------
+
+        logs_channel = guild.get_channel(
+            TICKETS_LOG_CHANNEL_ID
+        )
+
+
+        if not logs_channel:
+
+            print(
+                "❌ Logs channel not found!"
+            )
+
+        else:
+
+            log_embed = discord.Embed(
+                title="👑 NEW ROLE REQUEST",
+                description=(
+                    f"**User:** {user.mention}\n"
+                    f"**User ID:** `{user.id}`\n"
+                    f"**Requested Role:** `{role_name}`\n"
+                    f"**Ticket:** {channel.mention}\n\n"
+                    "An Administrator must review "
+                    "this request."
+                ),
+                color=discord.Color.purple()
+            )
+
+            log_embed.set_footer(
+                text="Boss Bob • Role Request System"
+            )
+
+            await logs_channel.send(
+                embed=log_embed,
+                view=RoleApproval(
+                    user_id=user.id,
+                    role_id=role.id,
+                    role_name=role_name,
+                    ticket_channel_id=channel.id
+                )
+            )
+
+
+        # ----------------------------------------------------
+        # Log
+        # ----------------------------------------------------
 
         await send_log(
             guild,
             "👑 Role Request Created",
-            f"**User:** {user.mention}\n"
-            f"**Role:** {role_name}\n"
-            f"**Ticket:** {channel.mention}",
+            (
+                f"**User:** {user.mention}\n"
+                f"**Role:** {role_name}\n"
+                f"**Ticket:** {channel.mention}"
+            ),
             discord.Color.purple()
         )
 
+
+        # ----------------------------------------------------
+        # User confirmation
+        # ----------------------------------------------------
+
         await interaction.response.send_message(
-            f"✅ Request created: {channel.mention}",
+            (
+                f"✅ Your **{role_name}** request has "
+                "been submitted!\n\n"
+                "An administrator will review it."
+            ),
             ephemeral=True
         )
 
+
+# ============================================================
+#                    ROLE TICKET VIEW
+# ============================================================
+
+class RoleTicketView(View):
+
+    def __init__(self):
+
+        super().__init__(timeout=None)
+
+
+    @discord.ui.button(
+        label="Close Request",
+        emoji="🔒",
+        style=discord.ButtonStyle.danger,
+        custom_id="boss_bob_role_close"
+    )
+    async def close_request(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        if not staff_or_admin(interaction.user):
+
+            await interaction.response.send_message(
+                "❌ You don't have permission to close this request.",
+                ephemeral=True
+            )
+
+            return
+
+        channel = interaction.channel
+
+        await interaction.response.send_message(
+            "🔒 Closing request...",
+            ephemeral=True
+        )
+
+        await asyncio.sleep(1)
+
+        try:
+
+            await channel.delete(
+                reason="Role request manually closed"
+            )
+
+        except discord.Forbidden:
+
+            pass
+
+
+# ============================================================
+#                    ROLE REQUEST PANEL
+# ============================================================
 
 class RolePanel(View):
 
     def __init__(self):
 
         super().__init__(timeout=None)
-        self.add_item(RoleSelect())
+
+        self.add_item(
+            RoleSelect()
+        )
 
 
 # ============================================================
-#                     ROLE APPROVAL
+#                    ROLE APPROVAL SYSTEM
 # ============================================================
 
 class RoleApproval(View):
 
-    def __init__(self, user_id, role_id, role_name):
+    def __init__(
+        self,
+        user_id,
+        role_id,
+        role_name,
+        ticket_channel_id
+    ):
 
         super().__init__(timeout=None)
 
         self.user_id = user_id
         self.role_id = role_id
         self.role_name = role_name
+        self.ticket_channel_id = ticket_channel_id
+
+
+    # ========================================================
+    #                         APPROVE
+    # ========================================================
 
     @discord.ui.button(
         label="Approve",
         emoji="✅",
-        style=discord.ButtonStyle.success
+        style=discord.ButtonStyle.success,
+        custom_id="boss_bob_role_approve"
     )
-    async def approve(self, interaction, button):
+    async def approve(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
 
         if not administrator(interaction.user):
 
@@ -481,60 +660,182 @@ class RoleApproval(View):
 
             return
 
-        member = interaction.guild.get_member(self.user_id)
-        role = interaction.guild.get_role(self.role_id)
+        guild = interaction.guild
 
-        if not member or not role:
+        member = guild.get_member(
+            self.user_id
+        )
+
+        role = guild.get_role(
+            self.role_id
+        )
+
+
+        if not member:
 
             await interaction.response.send_message(
-                "❌ Member or role not found.",
+                "❌ The requested member could not be found.",
                 ephemeral=True
             )
 
             return
 
+
+        if not role:
+
+            await interaction.response.send_message(
+                "❌ The requested role could not be found.",
+                ephemeral=True
+            )
+
+            return
+
+
+        # ----------------------------------------------------
+        # Check role hierarchy
+        # ----------------------------------------------------
+
+        if role >= guild.me.top_role:
+
+            await interaction.response.send_message(
+                (
+                    "❌ I cannot give this role because "
+                    "my bot role is not above it."
+                ),
+                ephemeral=True
+            )
+
+            return
+
+
+        # ----------------------------------------------------
+        # Give role
+        # ----------------------------------------------------
+
         try:
 
-            await member.add_roles(role)
+            await member.add_roles(
+                role,
+                reason=(
+                    f"Role request approved by "
+                    f"{interaction.user}"
+                )
+            )
 
         except discord.Forbidden:
 
             await interaction.response.send_message(
-                "❌ Boss Bob cannot assign this role. "
-                "Make sure the bot's role is above the role.",
+                (
+                    "❌ Discord denied the role change.\n"
+                    "Make sure my bot's role is above "
+                    "the requested role."
+                ),
                 ephemeral=True
             )
 
             return
 
+
+        # ----------------------------------------------------
+        # DM requester
+        # ----------------------------------------------------
+
         await send_dm(
             member,
             "✅ Role Request Approved",
-            f"Your **{self.role_name}** role request was approved!\n\n"
-            f"👤 **Approved by:** {interaction.user.mention}",
+            (
+                f"Your **{self.role_name}** role request "
+                "has been approved!\n\n"
+                f"**Approved by:** "
+                f"{interaction.user.mention}\n\n"
+                "The role has been added to your account."
+            ),
             discord.Color.green()
         )
 
-        await send_log(
-            interaction.guild,
-            "✅ Role Request Approved",
-            f"**User:** {member.mention}\n"
-            f"**Role:** {self.role_name}\n"
-            f"**Approved by:** {interaction.user.mention}",
-            discord.Color.green()
+
+        # ----------------------------------------------------
+        # Update logs
+        # ----------------------------------------------------
+
+        embed = discord.Embed(
+            title="✅ ROLE REQUEST APPROVED",
+            description=(
+                f"**User:** {member.mention}\n"
+                f"**Role:** `{self.role_name}`\n"
+                f"**Approved by:** "
+                f"{interaction.user.mention}\n\n"
+                "The role has been assigned."
+            ),
+            color=discord.Color.green()
         )
 
-        await interaction.response.send_message(
-            f"✅ {member.mention} received **{self.role_name}**.",
-            view=CloseTicket()
+        embed.set_footer(
+            text="Boss Bob • Role Request System"
         )
+
+
+        for item in self.children:
+
+            item.disabled = True
+
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=self
+        )
+
+
+        # ----------------------------------------------------
+        # Close request ticket
+        # ----------------------------------------------------
+
+        ticket_channel = guild.get_channel(
+            self.ticket_channel_id
+        )
+
+        if ticket_channel:
+
+            try:
+
+                await ticket_channel.send(
+                    embed=discord.Embed(
+                        title="✅ Request Approved",
+                        description=(
+                            f"Your **{self.role_name}** request "
+                            "was approved.\n\n"
+                            "This ticket will now close."
+                        ),
+                        color=discord.Color.green()
+                    )
+                )
+
+                await asyncio.sleep(2)
+
+                await ticket_channel.delete(
+                    reason="Role request approved"
+                )
+
+            except discord.Forbidden:
+
+                pass
+
+
+    # ========================================================
+    #                           DENY
+    # ========================================================
 
     @discord.ui.button(
         label="Deny",
         emoji="❌",
-        style=discord.ButtonStyle.danger
+        style=discord.ButtonStyle.danger,
+        custom_id="boss_bob_role_deny"
     )
-    async def deny(self, interaction, button):
+    async def deny(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
 
         if not administrator(interaction.user):
 
@@ -545,47 +846,135 @@ class RoleApproval(View):
 
             return
 
-        member = interaction.guild.get_member(self.user_id)
+
+        guild = interaction.guild
+
+        member = guild.get_member(
+            self.user_id
+        )
+
+
+        # ----------------------------------------------------
+        # DM requester
+        # ----------------------------------------------------
 
         if member:
 
             await send_dm(
                 member,
                 "❌ Role Request Denied",
-                f"Your **{self.role_name}** request was denied.\n\n"
-                f"👤 **Reviewed by:** {interaction.user.mention}",
+                (
+                    f"Your **{self.role_name}** role request "
+                    "has been denied.\n\n"
+                    f"**Reviewed by:** "
+                    f"{interaction.user.mention}"
+                ),
                 discord.Color.red()
             )
 
-        await interaction.response.send_message(
-            "❌ Role request denied.",
-            view=CloseTicket()
+
+        # ----------------------------------------------------
+        # Update logs
+        # ----------------------------------------------------
+
+        embed = discord.Embed(
+            title="❌ ROLE REQUEST DENIED",
+            description=(
+                f"**User:** "
+                f"{member.mention if member else self.user_id}\n"
+                f"**Role:** `{self.role_name}`\n"
+                f"**Denied by:** "
+                f"{interaction.user.mention}\n\n"
+                "The role was not assigned."
+            ),
+            color=discord.Color.red()
+        )
+
+        embed.set_footer(
+            text="Boss Bob • Role Request System"
         )
 
 
+        for item in self.children:
+
+            item.disabled = True
+
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=self
+        )
+
+
+        # ----------------------------------------------------
+        # Close request ticket
+        # ----------------------------------------------------
+
+        ticket_channel = guild.get_channel(
+            self.ticket_channel_id
+        )
+
+        if ticket_channel:
+
+            try:
+
+                await ticket_channel.send(
+                    embed=discord.Embed(
+                        title="❌ Request Denied",
+                        description=(
+                            f"Your **{self.role_name}** request "
+                            "was denied.\n\n"
+                            "This ticket will now close."
+                        ),
+                        color=discord.Color.red()
+                    )
+                )
+
+                await asyncio.sleep(2)
+
+                await ticket_channel.delete(
+                    reason="Role request denied"
+                )
+
+            except discord.Forbidden:
+
+                pass
+
+
 # ============================================================
-#                    CREATE TICKETS
+#                    CREATE SUPPORT TICKET
 # ============================================================
 
-async def create_ticket(interaction, ticket_type):
+async def create_support_ticket(
+    interaction: discord.Interaction
+):
 
     guild = interaction.guild
     user = interaction.user
 
-    # Prevent multiple open tickets of the same type
-    prefix = ticket_type.lower()
+
+    # --------------------------------------------------------
+    # Prevent duplicate ticket
+    # --------------------------------------------------------
 
     for channel in guild.text_channels:
 
-        if channel.name == f"{prefix}-{user.name}":
+        if channel.topic == f"ticket_owner:{user.id}":
 
             await interaction.response.send_message(
-                f"❌ You already have a {ticket_type.lower()} ticket: "
-                f"{channel.mention}",
+                (
+                    "❌ You already have an open "
+                    f"ticket: {channel.mention}"
+                ),
                 ephemeral=True
             )
 
             return
+
+
+    # --------------------------------------------------------
+    # Permissions
+    # --------------------------------------------------------
 
     overwrites = {
 
@@ -602,94 +991,111 @@ async def create_ticket(interaction, ticket_type):
             )
     }
 
-    for role_id in (STAFF_ROLE_ID, ADMIN_ROLE_ID):
 
-        role = guild.get_role(role_id)
+    for role_id in (
+        STAFF_ROLE_ID,
+        ADMIN_ROLE_ID
+    ):
+
+        role = guild.get_role(
+            role_id
+        )
 
         if role:
 
-            overwrites[role] = discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True
+            overwrites[role] = (
+                discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True
+                )
             )
 
+
+    # --------------------------------------------------------
+    # Create channel
+    # --------------------------------------------------------
+
     channel = await guild.create_text_channel(
-        f"{prefix}-{user.name}",
+        f"support-{user.name}",
         overwrites=overwrites,
         topic=f"ticket_owner:{user.id}"
     )
 
-    if ticket_type == "Support":
 
-        embed = discord.Embed(
-            title="🛠️ Support Ticket",
-            description=(
-                f"{user.mention}\n\n"
-                "Please explain your problem clearly.\n\n"
-                "Include:\n"
-                "• What is wrong?\n"
-                "• What were you trying to do?\n"
-                "• What happened?\n"
-                "• Screenshots if useful.\n\n"
-                "A staff member will help you."
-            ),
-            color=discord.Color.blurple()
-        )
+    # --------------------------------------------------------
+    # Ticket message
+    # --------------------------------------------------------
 
-        view = SupportResult()
+    embed = discord.Embed(
+        title="🛠️ BOSS BOB SUPPORT",
+        description=(
+            f"Welcome {user.mention}!\n\n"
+            "Please explain your problem clearly.\n\n"
+            "**Include:**\n"
+            "• What is wrong?\n"
+            "• What were you trying to do?\n"
+            "• What happened?\n"
+            "• Screenshots if useful.\n\n"
+            "A staff member will help you."
+        ),
+        color=discord.Color.blurple()
+    )
 
-    else:
+    embed.set_footer(
+        text="Boss Bob • Support System"
+    )
 
-        embed = discord.Embed(
-            title="🚨 Report Ticket",
-            description=(
-                f"{user.mention}\n\n"
-                "Please provide the details of your report.\n\n"
-                "Include:\n"
-                "• Who are you reporting?\n"
-                "• What happened?\n"
-                "• When did it happen?\n"
-                "• Evidence/screenshots if available.\n\n"
-                "Please only submit genuine reports."
-            ),
-            color=discord.Color.red()
-        )
-
-        view = ReportResult()
 
     await channel.send(
+        content=user.mention,
         embed=embed,
-        view=view
+        view=SupportView()
     )
+
+
+    # --------------------------------------------------------
+    # DM user
+    # --------------------------------------------------------
 
     await send_dm(
         user,
-        f"{'🛠️' if ticket_type == 'Support' else '🚨'} "
-        f"{ticket_type} Ticket Submitted",
-        f"Your {ticket_type.lower()} ticket has been submitted.\n\n"
-        f"🎫 **Ticket:** {channel.name}",
+        "🛠️ Support Ticket Created",
+        (
+            "Your support ticket has been created.\n\n"
+            f"🎫 **Ticket:** {channel.name}"
+        ),
         discord.Color.blurple()
-        if ticket_type == "Support"
-        else discord.Color.red()
     )
+
+
+    # --------------------------------------------------------
+    # Logs
+    # --------------------------------------------------------
 
     await send_log(
         guild,
-        f"🎫 {ticket_type} Ticket Created",
-        f"**User:** {user.mention}\n"
-        f"**Ticket:** {channel.mention}",
+        "🎫 Support Ticket Created",
+        (
+            f"**User:** {user.mention}\n"
+            f"**Ticket:** {channel.mention}"
+        ),
         discord.Color.blurple()
     )
 
+
+    # --------------------------------------------------------
+    # Response
+    # --------------------------------------------------------
+
     await interaction.response.send_message(
-        f"✅ Your ticket has been created: {channel.mention}",
+        f"✅ Your support ticket has been created: {channel.mention}",
         ephemeral=True
     )
 
 
 # ============================================================
-#                       PANELS
+#                    SUPPORT PANEL
 # ============================================================
 
 class SupportPanel(View):
@@ -698,37 +1104,21 @@ class SupportPanel(View):
 
         super().__init__(timeout=None)
 
+
     @discord.ui.button(
         label="Create Support Ticket",
         emoji="🛠️",
         style=discord.ButtonStyle.primary,
         custom_id="boss_bob_support"
     )
-    async def support(self, interaction, button):
+    async def support(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
 
-        await create_ticket(
-            interaction,
-            "Support"
-        )
-
-
-class ReportPanel(View):
-
-    def __init__(self):
-
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="Create Report Ticket",
-        emoji="🚨",
-        style=discord.ButtonStyle.danger,
-        custom_id="boss_bob_report"
-    )
-    async def report(self, interaction, button):
-
-        await create_ticket(
-            interaction,
-            "Report"
+        await create_support_ticket(
+            interaction
         )
 
 
@@ -743,45 +1133,96 @@ class Ticket(commands.Cog):
         self.bot = bot
         self.panels_ready = False
 
+
     async def create_panels(self):
 
         if self.panels_ready:
             return
 
+
+        print("🎫 Creating ticket panels...")
+
+
         for guild in self.bot.guilds:
 
-            support = guild.get_channel(SUPPORT_CHANNEL_ID)
-            report = guild.get_channel(REPORT_CHANNEL_ID)
-            roles = guild.get_channel(ROLE_REQUEST_CHANNEL_ID)
+            # ------------------------------------------------
+            # Support panel
+            # ------------------------------------------------
+
+            support = guild.get_channel(
+                SUPPORT_CHANNEL_ID
+            )
 
             if support:
 
                 await self.send_panel_once(
                     support,
                     "🛠️ BOSS BOB SUPPORT",
-                    "Need help? Click below to create a private support ticket.",
+                    (
+                        "Need help?\n\n"
+                        "Click the button below to create "
+                        "a private support ticket.\n\n"
+                        "Reports should also be submitted "
+                        "through Support."
+                    ),
                     SupportPanel()
                 )
 
-            if report:
-
-                await self.send_panel_once(
-                    report,
-                    "🚨 BOSS BOB REPORTS",
-                    "Need to report someone? Click below to create a private report ticket.",
-                    ReportPanel()
+                print(
+                    f"✅ Support panel ready in "
+                    f"{guild.name}"
                 )
+
+            else:
+
+                print(
+                    f"❌ Support channel not found in "
+                    f"{guild.name}: "
+                    f"{SUPPORT_CHANNEL_ID}"
+                )
+
+
+            # ------------------------------------------------
+            # Role request panel
+            # ------------------------------------------------
+
+            roles = guild.get_channel(
+                ROLE_REQUEST_CHANNEL_ID
+            )
 
             if roles:
 
                 await self.send_panel_once(
                     roles,
                     "👑 BOSS BOB ROLE REQUESTS",
-                    "Select Staff or Administrator to request a role.",
+                    (
+                        "Need a Staff or Administrator role?\n\n"
+                        "Select the role you want to request "
+                        "below.\n\n"
+                        "Your request will be reviewed by "
+                        "an Administrator."
+                    ),
                     RolePanel()
                 )
 
+                print(
+                    f"✅ Role panel ready in "
+                    f"{guild.name}"
+                )
+
+            else:
+
+                print(
+                    f"❌ Role request channel not found "
+                    f"in {guild.name}: "
+                    f"{ROLE_REQUEST_CHANNEL_ID}"
+                )
+
+
         self.panels_ready = True
+
+        print("🎫 Ticket panels finished.")
+
 
     async def send_panel_once(
         self,
@@ -791,38 +1232,84 @@ class Ticket(commands.Cog):
         view
     ):
 
-        async for message in channel.history(limit=50):
+        try:
 
-            if (
-                message.author == self.bot.user
-                and message.embeds
-                and message.embeds[0].title == title
+            async for message in channel.history(
+                limit=50
             ):
 
-                return
+                if (
+                    message.author == self.bot.user
+                    and message.embeds
+                    and message.embeds[0].title == title
+                ):
 
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.blurple()
-        )
+                    return
 
-        await channel.send(
-            embed=embed,
-            view=view
-        )
+
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=discord.Color.blurple()
+            )
+
+
+            await channel.send(
+                embed=embed,
+                view=view
+            )
+
+        except discord.Forbidden:
+
+            print(
+                f"❌ Missing permissions in "
+                f"#{channel.name}"
+            )
+
+        except Exception as error:
+
+            print(
+                f"❌ Could not create panel in "
+                f"#{channel.name}: {error}"
+            )
+
 
     @commands.Cog.listener()
     async def on_ready(self):
 
-        self.bot.add_view(SupportPanel())
-        self.bot.add_view(ReportPanel())
-        self.bot.add_view(RolePanel())
-        self.bot.add_view(CloseTicket())
+        # ----------------------------------------------------
+        # Persistent views
+        # ----------------------------------------------------
+
+        self.bot.add_view(
+            SupportPanel()
+        )
+
+        self.bot.add_view(
+            RolePanel()
+        )
+
+        self.bot.add_view(
+            RoleTicketView()
+        )
+
+        self.bot.add_view(
+            SupportView()
+        )
+
+        # ----------------------------------------------------
+        # Create panels
+        # ----------------------------------------------------
 
         await self.create_panels()
 
 
+# ============================================================
+#                         SETUP
+# ============================================================
+
 async def setup(bot):
 
-    await bot.add_cog(Ticket(bot))
+    await bot.add_cog(
+        Ticket(bot)
+    )
