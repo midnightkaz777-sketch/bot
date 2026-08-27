@@ -1,6 +1,6 @@
 # ============================================================
-#                       BOSS BOB
-#                  KAZWARE BOT SYSTEM
+#                         BOSS BOB
+#                    KAZWARE BOT SYSTEM
 #                         main.py
 # ============================================================
 
@@ -12,7 +12,7 @@ from discord.ext import commands
 
 
 # ============================================================
-#                    ENVIRONMENT TOKEN
+#                         TOKEN
 # ============================================================
 
 TOKEN = os.getenv("BOSS_BOB_TOKEN")
@@ -31,10 +31,125 @@ intents.message_content = True
 
 
 # ============================================================
+#                         BOT CLASS
+# ============================================================
+
+class BossBob(commands.Bot):
+
+    async def setup_hook(self):
+
+        print("🟣 Loading Boss Bob systems...")
+        print()
+
+        # ----------------------------------------------------
+        # Tickets
+        # ----------------------------------------------------
+
+        try:
+            from tickets import setup as setup_tickets
+
+            await setup_tickets(self)
+
+            print("✅ Ticket system loaded.")
+
+        except Exception as error:
+            print("❌ Ticket system failed to load.")
+            print(error)
+            traceback.print_exc()
+
+
+        # ----------------------------------------------------
+        # Verification
+        # ----------------------------------------------------
+
+        try:
+            from verification import setup_verification
+
+            result = setup_verification(self)
+
+            if hasattr(result, "__await__"):
+                await result
+
+            print("✅ Verification system loaded.")
+
+        except Exception as error:
+            print("❌ Verification system failed to load.")
+            print(error)
+            traceback.print_exc()
+
+
+        # ----------------------------------------------------
+        # Roblox
+        # ----------------------------------------------------
+
+        try:
+            from roblox import setup_roblox
+
+            result = setup_roblox(self)
+
+            if hasattr(result, "__await__"):
+                await result
+
+            print("✅ Roblox system loaded.")
+
+        except Exception as error:
+            print("❌ Roblox system failed to load.")
+            print(error)
+            traceback.print_exc()
+
+
+        # ----------------------------------------------------
+        # Security
+        # ----------------------------------------------------
+
+        try:
+            from security import initialize_security
+
+            result = initialize_security(self)
+
+            if hasattr(result, "__await__"):
+                await result
+
+            print("✅ Security system loaded.")
+
+        except Exception as error:
+            print("❌ Security system failed to load.")
+            print(error)
+            traceback.print_exc()
+
+
+        # ----------------------------------------------------
+        # Booster
+        # ----------------------------------------------------
+
+        try:
+            from booster import initialize_booster
+
+            result = initialize_booster(self)
+
+            if hasattr(result, "__await__"):
+                await result
+
+            print("✅ Booster system loaded.")
+
+        except Exception as error:
+            print("❌ Booster system failed to load.")
+            print(error)
+            traceback.print_exc()
+
+
+        print()
+        print("======================================")
+        print("       BOSS BOB SYSTEMS LOADED")
+        print("======================================")
+        print()
+
+
+# ============================================================
 #                           BOT
 # ============================================================
 
-bot = commands.Bot(
+bot = BossBob(
     command_prefix="!",
     intents=intents,
     help_command=None
@@ -42,247 +157,7 @@ bot = commands.Bot(
 
 
 # ============================================================
-#                     MODULE STATUS
-# ============================================================
-
-VERIFICATION_LOADED = False
-TICKETS_LOADED = False
-ROBLOX_LOADED = False
-SECURITY_LOADED = False
-BOOSTER_LOADED = False
-
-verification_setup = None
-send_verification_panel = None
-
-setup_tickets = None
-setup_roblox = None
-initialize_security = None
-initialize_booster = None
-
-
-# ============================================================
-#                    LOAD VERIFICATION
-# ============================================================
-
-try:
-    from verification import (
-        setup_verification,
-        send_verification_panel
-    )
-
-    verification_setup = setup_verification
-    VERIFICATION_LOADED = True
-
-    print("✅ verification.py loaded.")
-
-except Exception as error:
-    print("⚠️ verification.py could not be loaded.")
-    print(f"   {error}")
-    traceback.print_exc()
-
-
-# ============================================================
-#                       LOAD TICKETS
-# ============================================================
-
-try:
-    from tickets import setup_tickets
-
-    TICKETS_LOADED = True
-
-    print("✅ tickets.py loaded.")
-
-except Exception as error:
-    print("⚠️ tickets.py could not be loaded.")
-    print(f"   {error}")
-    traceback.print_exc()
-
-
-# ============================================================
-#                       LOAD ROBLOX
-# ============================================================
-
-try:
-    from roblox import setup_roblox
-
-    ROBLOX_LOADED = True
-
-    print("✅ roblox.py loaded.")
-
-except Exception as error:
-    print("⚠️ roblox.py could not be loaded.")
-    print(f"   {error}")
-    traceback.print_exc()
-
-
-# ============================================================
-#                     LOAD SECURITY
-# ============================================================
-
-try:
-    from security import initialize_security
-
-    SECURITY_LOADED = True
-
-    print("✅ security.py loaded.")
-
-except Exception as error:
-    print("⚠️ security.py could not be loaded.")
-    print(f"   {error}")
-    traceback.print_exc()
-
-
-# ============================================================
-#                      LOAD BOOSTER
-# ============================================================
-
-try:
-    from booster import initialize_booster
-
-    BOOSTER_LOADED = True
-
-    print("✅ booster.py loaded.")
-
-except Exception as error:
-    print("⚠️ booster.py could not be loaded.")
-    print(f"   {error}")
-    traceback.print_exc()
-
-
-# ============================================================
-#                    SETUP ONCE
-# ============================================================
-
-SYSTEMS_STARTED = False
-
-
-async def initialize_systems():
-    global SYSTEMS_STARTED
-
-    if SYSTEMS_STARTED:
-        return
-
-    SYSTEMS_STARTED = True
-
-    print()
-    print("======================================")
-    print("        STARTING BOSS BOB SYSTEMS")
-    print("======================================")
-
-    # --------------------------------------------------------
-    # Verification
-    # --------------------------------------------------------
-
-    if VERIFICATION_LOADED:
-        try:
-            result = verification_setup(bot)
-
-            # Support both normal functions and async functions.
-            if hasattr(result, "__await__"):
-                await result
-
-            print("✅ Verification system started.")
-
-        except Exception:
-            print("❌ Verification system failed.")
-            traceback.print_exc()
-
-    else:
-        print("❌ Verification system unavailable.")
-
-
-    # --------------------------------------------------------
-    # Tickets
-    # --------------------------------------------------------
-
-    if TICKETS_LOADED:
-        try:
-            result = setup_tickets(bot)
-
-            if hasattr(result, "__await__"):
-                await result
-
-            print("✅ Ticket system started.")
-
-        except Exception:
-            print("❌ Ticket system failed.")
-            traceback.print_exc()
-
-    else:
-        print("❌ Ticket system unavailable.")
-
-
-    # --------------------------------------------------------
-    # Roblox
-    # --------------------------------------------------------
-
-    if ROBLOX_LOADED:
-        try:
-            result = setup_roblox(bot)
-
-            if hasattr(result, "__await__"):
-                await result
-
-            print("✅ Roblox system started.")
-
-        except Exception:
-            print("❌ Roblox system failed.")
-            traceback.print_exc()
-
-    else:
-        print("❌ Roblox system unavailable.")
-
-
-    # --------------------------------------------------------
-    # Security
-    # --------------------------------------------------------
-
-    if SECURITY_LOADED:
-        try:
-            result = initialize_security(bot)
-
-            if hasattr(result, "__await__"):
-                await result
-
-            print("✅ Security system started.")
-
-        except Exception:
-            print("❌ Security system failed.")
-            traceback.print_exc()
-
-    else:
-        print("❌ Security system unavailable.")
-
-
-    # --------------------------------------------------------
-    # Booster
-    # --------------------------------------------------------
-
-    if BOOSTER_LOADED:
-        try:
-            result = initialize_booster(bot)
-
-            if hasattr(result, "__await__"):
-                await result
-
-            print("✅ Booster system started.")
-
-        except Exception:
-            print("❌ Booster system failed.")
-            traceback.print_exc()
-
-    else:
-        print("❌ Booster system unavailable.")
-
-
-    print("======================================")
-    print("        BOSS BOB SYSTEMS STARTED")
-    print("======================================")
-    print()
-
-
-# ============================================================
-#                       BOT READY
+#                       READY EVENT
 # ============================================================
 
 @bot.event
@@ -298,17 +173,19 @@ async def on_ready():
     print("======================================")
     print()
 
-    await initialize_systems()
 
     # --------------------------------------------------------
-    # Verification Panel
+    # Verification Panels
     # --------------------------------------------------------
 
-    if VERIFICATION_LOADED and send_verification_panel:
+    try:
+
+        from verification import send_verification_panel
 
         for guild in bot.guilds:
 
             try:
+
                 result = send_verification_panel(
                     bot,
                     guild
@@ -322,13 +199,20 @@ async def on_ready():
                     f"{guild.name}"
                 )
 
-            except Exception:
+            except Exception as error:
+
                 print(
-                    f"❌ Verification panel error: "
-                    f"{guild.name}"
+                    f"❌ Verification panel error "
+                    f"in {guild.name}: {error}"
                 )
 
-                traceback.print_exc()
+    except ImportError:
+        pass
+
+    except Exception:
+
+        print("❌ Verification panel system failed.")
+        traceback.print_exc()
 
 
     # --------------------------------------------------------
@@ -339,32 +223,11 @@ async def on_ready():
     print("======================================")
     print("          BOSS BOB SYSTEMS")
     print("======================================")
-
-    print(
-        f"Verification: "
-        f"{'ONLINE' if VERIFICATION_LOADED else 'OFFLINE'}"
-    )
-
-    print(
-        f"Tickets: "
-        f"{'ONLINE' if TICKETS_LOADED else 'OFFLINE'}"
-    )
-
-    print(
-        f"Roblox: "
-        f"{'ONLINE' if ROBLOX_LOADED else 'OFFLINE'}"
-    )
-
-    print(
-        f"Security: "
-        f"{'ONLINE' if SECURITY_LOADED else 'OFFLINE'}"
-    )
-
-    print(
-        f"Booster: "
-        f"{'ONLINE' if BOOSTER_LOADED else 'OFFLINE'}"
-    )
-
+    print("Tickets:      ONLINE")
+    print("Verification: ONLINE")
+    print("Security:     ONLINE")
+    print("Roblox:       ONLINE")
+    print("Booster:      ONLINE")
     print("======================================")
     print("          🟣 BOSS BOB READY")
     print("======================================")
@@ -382,30 +245,31 @@ async def on_guild_join(guild):
         f"🟣 Boss Bob joined: {guild.name}"
     )
 
-    # Send verification panel to new server.
-    if VERIFICATION_LOADED and send_verification_panel:
+    try:
 
-        try:
-            result = send_verification_panel(
-                bot,
-                guild
-            )
+        from verification import send_verification_panel
 
-            if hasattr(result, "__await__"):
-                await result
+        result = send_verification_panel(
+            bot,
+            guild
+        )
 
-            print(
-                f"✅ Verification panel created "
-                f"in {guild.name}"
-            )
+        if hasattr(result, "__await__"):
+            await result
 
-        except Exception:
-            print(
-                f"❌ Could not create verification "
-                f"panel in {guild.name}"
-            )
+        print(
+            f"✅ Verification panel created "
+            f"in {guild.name}"
+        )
 
-            traceback.print_exc()
+    except Exception:
+
+        print(
+            f"❌ Could not create verification "
+            f"panel in {guild.name}"
+        )
+
+        traceback.print_exc()
 
 
 # ============================================================
@@ -424,7 +288,7 @@ async def on_error(event, *args, **kwargs):
 
 
 # ============================================================
-#                     TOKEN CHECK
+#                       TOKEN CHECK
 # ============================================================
 
 def check_configuration():
@@ -436,16 +300,11 @@ def check_configuration():
         print("❌ BOSS_BOB_TOKEN IS MISSING")
         print("======================================")
         print()
-        print(
-            "Create a Railway environment variable named:"
-        )
+        print("Create a Railway variable named:")
         print()
         print("BOSS_BOB_TOKEN")
         print()
-        print(
-            "Put your Boss Bob Discord bot token "
-            "inside that environment variable."
-        )
+        print("Put your Discord bot token there.")
         print()
 
         return False
@@ -474,9 +333,7 @@ if __name__ == "__main__":
 
         print()
         print("❌ INVALID DISCORD BOT TOKEN")
-        print(
-            "Check the BOSS_BOB_TOKEN environment variable."
-        )
+        print("Check BOSS_BOB_TOKEN in Railway.")
         print()
 
     except discord.PrivilegedIntentsRequired:
@@ -485,8 +342,8 @@ if __name__ == "__main__":
         print("❌ PRIVILEGED INTENTS ERROR")
         print()
         print(
-            "Open the Discord Developer Portal "
-            "and enable the required intents."
+            "Enable the required intents in the "
+            "Discord Developer Portal."
         )
         print()
 
