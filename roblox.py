@@ -16,7 +16,7 @@ from discord.ext import commands, tasks
 # ============================================================
 
 # Discord channel where Roblox updates should be announced
-ROBLOX_UPDATE_CHANNEL_ID = 123456789012345678
+ROBLOX_UPDATE_CHANNEL_ID = 1542637457495957666
 
 # Check Roblox every 10 minutes
 CHECK_INTERVAL_MINUTES = 10
